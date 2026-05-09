@@ -1,0 +1,18 @@
+version: v2
+
+clean: true
+
+inputs:
+  - git_repo: https://github.com/cosmos/ibc-apps.git
+    tag: modules/async-icq/v8.0.0
+    subdir: modules/async-icq/proto
+
+plugins:
+  - remote: buf.build/community/google-gnostic-openapi:v0.7.1
+    out: ./gen/ibcapps
+    include_imports: true
+    opt:
+      - default_response=true
+      - fq_schema_naming=false
+      - title=Juno REST API
+      - version=v30.0.0

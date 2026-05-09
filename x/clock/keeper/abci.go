@@ -9,8 +9,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	helpers "github.com/CosmosContracts/juno/v29/app/helpers"
-	"github.com/CosmosContracts/juno/v29/x/clock/types"
+	"github.com/CosmosContracts/juno/v30/app/utils"
+	"github.com/CosmosContracts/juno/v30/x/clock/types"
 )
 
 var endBlockSudoMessage = []byte(types.EndBlockSudoMessage)
@@ -53,7 +53,7 @@ func EndBlocker(ctx context.Context, k Keeper) error {
 		childCtx := sdkCtx.WithGasMeter(storetypes.NewGasMeter(p.ContractGasLimit))
 
 		// Execute contract
-		helpers.ExecuteContract(k.GetContractKeeper(), childCtx, contractAddr, endBlockSudoMessage, &err)
+		utils.ExecuteContract(k.GetContractKeeper(), childCtx, contractAddr, endBlockSudoMessage, &err)
 		if handleError(ctx, k, logger, errorExecs, &errorExists, err, idx, contract.ContractAddress) {
 			continue
 		}
@@ -85,9 +85,9 @@ func handleError(
 		errorExecs[idx] = contractAddress
 
 		// Attempt to jail contract, log error if present
-		err := k.SetJailStatus(ctx, contractAddress, true)
-		if err != nil {
-			logger.Error("Failed to jail contract", "contract", contractAddress, "error", err)
+		jailErr := k.SetJailStatus(ctx, contractAddress, true)
+		if jailErr != nil {
+			logger.Error("Failed to jail contract", "contract", contractAddress, "error", jailErr)
 		}
 	}
 
