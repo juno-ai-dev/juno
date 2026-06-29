@@ -15,6 +15,7 @@ Branch: [`jakehartnell/v30`](../../). Last commit Nov 10, 2025. ~6 months stale.
 - [06 — Testing + CI](06-testing-ci.md): definition-of-green; unit + ictest + CI workflow updates
 - [07 — Rollout](07-rollout.md): testnet path, governance proposal, mainnet halt-height
 - [08 — Security review](08-security-review.md): scope, checklist, who reviews what
+- [V30 external-review watch plan](V30-EXTERNAL-REVIEW-WATCH-PLAN.md): current PR #1202 watch rules and external-review blocker state
 
 ## Status (2026-05-08)
 
