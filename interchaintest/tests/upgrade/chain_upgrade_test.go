@@ -27,10 +27,12 @@ const (
 	expectedConsensusMaxGas = uint64(30_000_000)
 )
 
-// baseChain is the current version of the chain that will be upgraded from
+// baseChain is pinned to uni-7's documented v27 baseline for the
+// testnet rehearsal. This branch validates the otherwise-untested direct
+// v27 -> v30 migration before any public testnet halt is scheduled.
 var baseChain = ibc.DockerImage{
 	Repository: e2esuite.JunoRepo,
-	Version:    "v29.0.0",
+	Version:    "v27.0.0",
 	UIDGID:     "1025:1025",
 }
 
