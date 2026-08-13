@@ -34,21 +34,16 @@ type ForwardMetadata struct {
 	RefundSequence *uint64       `json:"refund_sequence,omitempty"`
 }
 
-type pfmHop struct {
-	portID    string
-	channelID string
-}
-
-func pfmEscrowAccounts(prefixes [3]string, hops [3]pfmHop) [3]string {
-	var accounts [3]string
-	for i, hop := range hops {
-		accounts[i] = sdk.MustBech32ifyAddressBytes(
-			prefixes[i],
-			transfertypes.GetEscrowAddress(hop.portID, hop.channelID),
-		)
+func pfmEscrowAccounts(
+	prefixes [3]string,
+	abChan *ibc.ChannelOutput,
+	bcChan, cdChan ibc.ChannelCounterparty,
+) [3]string {
+	return [3]string{
+		sdk.MustBech32ifyAddressBytes(prefixes[0], transfertypes.GetEscrowAddress(abChan.PortID, abChan.ChannelID)),
+		sdk.MustBech32ifyAddressBytes(prefixes[1], transfertypes.GetEscrowAddress(bcChan.PortID, bcChan.ChannelID)),
+		sdk.MustBech32ifyAddressBytes(prefixes[2], transfertypes.GetEscrowAddress(cdChan.PortID, cdChan.ChannelID)),
 	}
-
-	return accounts
 }
 
 type PfmTestSuite struct {
@@ -210,11 +205,9 @@ func (s *PfmTestSuite) TestPacketForwardMiddlewareRouter() {
 			s.Chains[1].Config().Bech32Prefix,
 			s.Chains[2].Config().Bech32Prefix,
 		},
-		[3]pfmHop{
-			{portID: abChan.PortID, channelID: abChan.ChannelID},
-			{portID: bcChan.PortID, channelID: bcChan.ChannelID},
-			{portID: cdChan.PortID, channelID: cdChan.ChannelID},
-		},
+		abChan,
+		bcChan,
+		cdChan,
 	)
 
 	t.Run("multi-hop a->b->c->d", func(t *testing.T) {
