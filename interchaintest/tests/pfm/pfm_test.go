@@ -34,6 +34,23 @@ type ForwardMetadata struct {
 	RefundSequence *uint64       `json:"refund_sequence,omitempty"`
 }
 
+type pfmHop struct {
+	portID    string
+	channelID string
+}
+
+func pfmEscrowAccounts(prefixes [3]string, hops [3]pfmHop) [3]string {
+	var accounts [3]string
+	for i, hop := range hops {
+		accounts[i] = sdk.MustBech32ifyAddressBytes(
+			prefixes[i],
+			transfertypes.GetEscrowAddress(hop.portID, hop.channelID),
+		)
+	}
+
+	return accounts
+}
+
 type PfmTestSuite struct {
 	*e2esuite.E2ETestSuite
 
@@ -187,9 +204,18 @@ func (s *PfmTestSuite) TestPacketForwardMiddlewareRouter() {
 	secondHopIBCDenom := secondHopDenomTrace.IBCDenom()
 	thirdHopIBCDenom := thirdHopDenomTrace.IBCDenom()
 
-	firstHopEscrowAccount := sdk.MustBech32ifyAddressBytes(s.Chain.Config().Bech32Prefix, transfertypes.GetEscrowAddress(abChan.PortID, abChan.ChannelID))
-	secondHopEscrowAccount := sdk.MustBech32ifyAddressBytes(s.Chains[1].Config().Bech32Prefix, transfertypes.GetEscrowAddress(bcChan.PortID, bcChan.ChannelID))
-	thirdHopEscrowAccount := sdk.MustBech32ifyAddressBytes(s.Chains[2].Config().Bech32Prefix, transfertypes.GetEscrowAddress(cdChan.PortID, abChan.ChannelID))
+	escrowAccounts := pfmEscrowAccounts(
+		[3]string{
+			s.Chain.Config().Bech32Prefix,
+			s.Chains[1].Config().Bech32Prefix,
+			s.Chains[2].Config().Bech32Prefix,
+		},
+		[3]pfmHop{
+			{portID: abChan.PortID, channelID: abChan.ChannelID},
+			{portID: bcChan.PortID, channelID: bcChan.ChannelID},
+			{portID: cdChan.PortID, channelID: cdChan.ChannelID},
+		},
+	)
 
 	t.Run("multi-hop a->b->c->d", func(t *testing.T) {
 		// Send packet from Chain A->Chain B->Chain C->Chain D
@@ -253,22 +279,22 @@ func (s *PfmTestSuite) TestPacketForwardMiddlewareRouter() {
 		require.True(t, chainABalance.LTE(expectedChainA) &&
 			chainABalance.GTE(expectedChainA.Sub(sdkmath.NewInt(1_000_000))),
 			"chainABalance %s outside fee tolerance of expected %s", chainABalance, expectedChainA)
-		require.Equal(t, sdkmath.NewInt(0), chainBBalance)
-		require.Equal(t, sdkmath.NewInt(0), chainCBalance)
-		require.Equal(t, transferAmount.Int64(), chainDBalance.Int64())
+		require.Equal(t, sdkmath.ZeroInt(), chainBBalance, "first-hop receiver balance")
+		require.Equal(t, sdkmath.ZeroInt(), chainCBalance, "second-hop receiver balance")
+		require.Equal(t, transferAmount, chainDBalance, "third-hop receiver balance")
 
-		firstHopEscrowBalance, err := s.Chain.GetBalance(s.Ctx, firstHopEscrowAccount, s.Chain.Config().Denom)
+		firstHopEscrowBalance, err := s.Chain.GetBalance(s.Ctx, escrowAccounts[0], s.Chain.Config().Denom)
 		require.NoError(t, err)
 
-		secondHopEscrowBalance, err := s.Chains[1].GetBalance(s.Ctx, secondHopEscrowAccount, firstHopIBCDenom)
+		secondHopEscrowBalance, err := s.Chains[1].GetBalance(s.Ctx, escrowAccounts[1], firstHopIBCDenom)
 		require.NoError(t, err)
 
-		thirdHopEscrowBalance, err := s.Chains[2].GetBalance(s.Ctx, thirdHopEscrowAccount, secondHopIBCDenom)
+		thirdHopEscrowBalance, err := s.Chains[2].GetBalance(s.Ctx, escrowAccounts[2], secondHopIBCDenom)
 		require.NoError(t, err)
 
-		require.Equal(t, transferAmount.Int64(), firstHopEscrowBalance.Int64())
-		require.Equal(t, transferAmount.Int64(), secondHopEscrowBalance.Int64())
-		require.Equal(t, transferAmount.Int64(), thirdHopEscrowBalance.Int64())
+		require.Equal(t, transferAmount, firstHopEscrowBalance, "first-hop escrow balance")
+		require.Equal(t, transferAmount, secondHopEscrowBalance, "second-hop escrow balance")
+		require.Equal(t, transferAmount, thirdHopEscrowBalance, "third-hop escrow balance")
 	})
 
 	err = s.Relayer.StopRelayer(s.Ctx, s.eRep)
