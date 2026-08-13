@@ -3,27 +3,12 @@
 const TARGET_REPOSITORY = 'CosmosContracts/juno-std';
 const EVENT_TYPE = 'juno-release';
 
-function booleanInput(value) {
-  return value === true || String(value).toLowerCase() === 'true';
-}
-
-// Apply Git's ref-name restrictions without invoking git, so payload construction is
-// deterministic and can be tested without network access or a repository dispatch.
 function validateReleaseTag(tag) {
-  if (typeof tag !== 'string' || tag.length === 0) {
-    throw new Error('Unable to determine release tag');
-  }
-
-  const components = tag.split('/');
-  const invalid = components.some((component) => component.length === 0
-      || component.startsWith('.')
-      || component.endsWith('.lock'))
-    || tag.endsWith('.')
-    || tag.includes('..')
-    || tag.includes('@{')
-    || /[\x00-\x20\x7f~^:?*[\\]/.test(tag);
-  if (invalid) {
-    throw new Error(`Invalid release tag: '${tag}'`);
+  // Juno release tags use SemVer with a mandatory leading "v". Numeric
+  // prerelease identifiers may not contain leading zeroes (SemVer 2.0.0).
+  const semver = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+  if (typeof tag !== 'string' || !semver.test(tag)) {
+    throw new Error(`Invalid Juno release tag: '${tag || ''}'`);
   }
 
   return tag;
@@ -39,10 +24,12 @@ function requiredEnv(env, name) {
 
 function buildDispatchRequest(payload, env) {
   const release = payload && payload.release;
-  const inputs = (payload && payload.inputs) || {};
-  const releaseTag = validateReleaseTag(release ? release.tag_name : inputs.release_tag);
-  const isDraft = release ? Boolean(release.draft) : booleanInput(inputs.is_draft);
-  const isPrerelease = release ? Boolean(release.prerelease) : booleanInput(inputs.is_prerelease);
+  if (!release) {
+    throw new Error('A resolved GitHub release payload is required');
+  }
+  const releaseTag = validateReleaseTag(release.tag_name);
+  const isDraft = Boolean(release.draft);
+  const isPrerelease = Boolean(release.prerelease);
   const [owner, repo] = TARGET_REPOSITORY.split('/');
 
   const repos = {

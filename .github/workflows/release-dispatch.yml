@@ -2,23 +2,18 @@ name: Dispatch Release to juno-std
 
 on:
   release:
-    types: [released, prereleased]
+    # "published" covers both full releases and draft-to-prerelease transitions.
+    # Payload fields below determine whether the published release is a prerelease.
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
         description: Release tag to redispatch
         required: true
         type: string
-      is_draft:
-        description: Mark the release as a draft
-        required: true
-        default: false
-        type: boolean
-      is_prerelease:
-        description: Mark the release as a prerelease
-        required: true
-        default: false
-        type: boolean
+
+permissions:
+  contents: read
 
 env:
   JUNO_REPO: "https://github.com/CosmosContracts/juno.git"
@@ -46,25 +41,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out payload builder
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          # Never execute code from the release tag while DISPATCH_TOKEN is present.
+          # The builder must be the exact revision containing this workflow run.
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
 
       - name: Dispatch release event
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           github-token: ${{ secrets.DISPATCH_TOKEN }}
           script: |
-            const { buildDispatchRequest } = require('./.github/scripts/release-dispatch');
+            const { buildDispatchRequest, validateReleaseTag } = require('./.github/scripts/release-dispatch');
 
-            let request;
+            let payload = context.payload;
             try {
-              request = buildDispatchRequest(context.payload, process.env);
+              if (!payload.release) {
+                const releaseTag = validateReleaseTag(payload.inputs.release_tag);
+                const { data: release } = await github.rest.repos.getReleaseByTag({
+                  ...context.repo,
+                  tag: releaseTag,
+                });
+                payload = { ...payload, release };
+              }
+
+              const request = buildDispatchRequest(payload, process.env);
+              core.info(`Dispatching to ${request.owner}/${request.repo} with payload: ${JSON.stringify(request.client_payload)}`);
+              await github.rest.repos.createDispatchEvent(request);
+              core.info('Repository dispatch event sent successfully.');
             } catch (error) {
               core.setFailed(error.message);
-              return;
             }
-
-            core.info(`Dispatching to ${request.owner}/${request.repo} with payload: ${JSON.stringify(request.client_payload)}`);
-            await github.rest.repos.createDispatchEvent(request);
-            core.info('Repository dispatch event sent successfully.');
